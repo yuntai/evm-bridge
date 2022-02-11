@@ -45,10 +45,10 @@ contract Bridge is Ownable {
 	struct TransferRecord {
 		bytes32 id;
 		uint from_chain_id; 
-		address from_address; 
-		address from_token; 
 		uint to_chain_id; 
+		address from_address; 
 		address to_address; 
+		address from_token; 
 		address to_token;
 		uint amount;
 		TransferState state;
@@ -68,10 +68,10 @@ contract Bridge is Ownable {
 	// transfer record
 	mapping(bytes32=>TransferRecord) public records;
 
-	function _generateId(uint to_chain_id, uint from_chain_id, address from_address, address to_address, address from_token, address to_token, uint amount) internal pure returns(bytes32) {
+	function _generateId(uint from_chain_id, uint to_chain_id, address from_address, address to_address, address from_token, address to_token, uint amount) internal pure returns(bytes32) {
 		bytes32 digest = keccak256(                                                                     
-			abi.encodePacked(                                                                           
-                to_chain_id, from_chain_id,
+			abi.encodePacked(
+                from_chain_id, to_chain_id,
 				from_address, to_address,
 				from_token, to_token,
 				amount
@@ -86,18 +86,18 @@ contract Bridge is Ownable {
 		TransferRecord memory rec = TransferRecord({
 			id: id,
 			from_chain_id: block.chainid,
-			from_address: msg.sender,
-			from_token: from_token,
 			to_chain_id: to_chain_id,
+			from_address: msg.sender,
 			to_address: to_address,	
+			from_token: from_token,
 			to_token: to_token,
             amount: amount,
 			state: TransferState.LOCKED
 		});
 
 		peer_balance -= amount;
-		ERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 		records[id] = rec;	
+		ERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 		emit LockEvent(id);
     }
 
@@ -108,7 +108,7 @@ contract Bridge is Ownable {
 		ERC20(token).safeTransferFrom(address(this), records[id].from_address, records[id].amount);
     }
 
-	function revert_request(bytes32 id) external onlyRelay {
+	function revert_request(bytes32 id) external {
 		require(records[id].id != 0x0, "record not found");
 		require(records[id].state == TransferState.LOCKED);
 	  	records[id].state = TransferState.REVERT_REQUESTED;
@@ -124,7 +124,7 @@ contract Bridge is Ownable {
 			peer_balance += records[id].amount;
     }
 
-	function handle_lock(TransferRecord calldata record) onlyRelay external {
+	function handle_lock(TransferRecord calldata record) external onlyRelay {
 		peer_balance += record.amount;
 		records[record.id] = record;
 		records[record.id].state = TransferState.LOCKED;
