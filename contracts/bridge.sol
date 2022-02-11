@@ -118,6 +118,7 @@ contract Bridge is Ownable {
   function revert_request(bytes32 id) external {
     require(records[id].id != 0x0, "record not found");
     require(records[id].state == TransferState.LOCKED);
+    require(msg.sender == records[id].from_address, "invalid user");
     records[id].state = TransferState.REVERT_REQUESTED;
     emit RevertRequestEvent(id);
   }
