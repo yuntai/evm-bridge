@@ -61,7 +61,7 @@ contract Bridge is Ownable {
   event RevertResponseEvent(bytes32 indexed, TransferState);
 
   address relay;
-  address token;
+  address token; // no need to be state var, but requires verification when lock()
   uint counter;
 
   // assumption under having a single peer chain and single type of token
@@ -84,6 +84,7 @@ contract Bridge is Ownable {
     return digest;
   }
 
+  //TODO: check reentry attack
   function lock(uint to_chain_id, address to_address, address from_token, address to_token, uint amount) external {
     require(peer_balance > amount, "no sufficient peer balance");
 
@@ -132,18 +133,28 @@ contract Bridge is Ownable {
       peer_balance += records[id].amount;
   }
 
+  //TODO: check calldata
   function handle_lock(TransferRecord calldata record) external onlyRelay {
+    //TODO: perhaps hash id check here?
     peer_balance += record.amount;
     records[record.id] = record;
     records[record.id].state = TransferState.LOCKED;
   }
 
+  //TODO: check reentry attack
   function release(bytes32 id) external {
     require(records[id].id != 0x0, "record not found");
     require(records[id].state == TransferState.LOCKED);
-    require(msg.sender == records[id].to_address, "invalid user");
+    require(msg.sender == records[id].to_address, "bridge: invalid user");
+    //TODO: require msg to "bridge: {msg}"
     records[id].state = TransferState.RELEASED;
-    SafeERC20.safeTransfer(IERC20(token), records[id].to_address, records[id].amount);
+    uint256 MAX_INT = 2**256 - 1;
+    //TODO: approve maximum?
+    //TODO: approve & transfer?
+    SafeERC20.safeApprove(IERC20(records[id].to_token), address(this), MAX_INT);
+    SafeERC20.safeTransferFrom(IERC20(records[id].to_token), address(this), records[id].to_address, records[id].amount);
+    //TODO: use safeIncreaseAllownce/safeDecreaseAllownce
+    //tODO: change all to release[id].{from/to}_token instead of using state 'token' var
   }
 
   function handle_revert_request(bytes32 id) external onlyRelay {
