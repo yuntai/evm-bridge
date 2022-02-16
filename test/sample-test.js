@@ -2,12 +2,18 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { soliditySha3 } = require("web3-utils");
 
-
 //TODO: more negative test case
 //      check against onlyOwner, onlyRelay, to_address, from_address
 //      peer balance
 
-describe("Bridge", function () {
+async function getTimestamp() {
+    const blockNumBefore = await ethers.provider.getBlockNumber();
+    const blockBefore = await ethers.provider.getBlock(blockNumBefore);
+    return blockBefore.timestamp;
+}
+
+describe("Single-sided", function () {
+
   let token;
   let bridge;
   let to_chain_id, from_chain_id;
@@ -24,10 +30,10 @@ describe("Bridge", function () {
   RELEASED = 4;
 
   beforeEach(async function() {
+    hre.changeNetwork('hardhat');
     [owner, bob, alice, relay, ..._] = await ethers.getSigners();
-
     const Token = await ethers.getContractFactory("Token");
-    token = await Token.deploy("Token", "Token");
+    token = await Token.deploy();
     await token.deployed();
 
     const Bridge = await ethers.getContractFactory("Bridge");
@@ -43,7 +49,7 @@ describe("Bridge", function () {
     token.connect(bob).approve(bridge.address, 10000);
 
     await bridge.setPeerBalance(100000)
-    //TODO: use bignumber
+    //TODO: use bignumber?
     initialPeerBalance = +(await bridge.peer_balance());
 
     token.approve(bridge.address, 10000);
@@ -53,40 +59,41 @@ describe("Bridge", function () {
     bobBegBal = +(await token.balanceOf(bob.address));
 
     to_chain_id = 7777;
-    from_chain_id = 31337; // hardhat default chain id TODO: how to access network config here
+    from_chain_id = 31337; // hardhat default chain id; TODO: how to access network config here
   });
 
   it("Sender Lock", async function () {
+    const tx = await bridge.connect(bob).lock(to_chain_id, alice.address, token.address, token.address, 1000);
+    await tx.wait();
+
     const expectedId = soliditySha3(
       from_chain_id, to_chain_id,
       bob.address, alice.address,
       token.address, token.address,
       1000,
-      0
+      0,
+      await getTimestamp()
     );
-    const tx = await bridge.connect(bob).lock(to_chain_id, alice.address, token.address, token.address, 1000);
+
     await expect(tx).to.emit(bridge, 'LockEvent').withArgs(expectedId);
-    await expect(bridge.records(expectedId).state == LOCKED);
+    expect((await bridge.records(expectedId)).state).to.equal(LOCKED);
     expect(await bridge.peer_balance()).to.equal(initialPeerBalance-1000);
-    //const receipt = await tx.wait();
-    // approve/transfer events from token
-    //for (const event of receipt.events) {
-    //  console.log(event);
-    //  console.log(`Event ${event.event} with args ${event.args}`);
-    // }
-    expect(await token.balanceOf(bob.address)).to.equal(bobBegBal - 1000);
-    expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal + 1000);
+    expect(await token.balanceOf(bob.address)).to.equal(bobBegBal-1000);
+    expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal+1000);
   });
 
   it("Sender Lock & Revert", async function () {
+    const tx = await bridge.connect(bob).lock(to_chain_id, alice.address, token.address, token.address, 1001);
+    await tx.wait();
+
     const _id = soliditySha3(
       from_chain_id, to_chain_id,
       bob.address, alice.address,
       token.address, token.address,
       1001,
-      0
+      0,
+      await getTimestamp()
     );
-    await expect(await bridge.connect(bob).lock(to_chain_id, alice.address, token.address, token.address, 1001)).to.emit(bridge, 'LockEvent').withArgs(_id);
     await expect(bridge.connect(bob).revert_request(_id)).to.emit(bridge, 'RevertRequestEvent').withArgs(_id);
     await expect(bridge.records(_id).state == REVERT_REQUESTED);
 
@@ -98,15 +105,18 @@ describe("Bridge", function () {
   });
 
   it("Sender Lock & Revert & Redeem", async function () {
+    const tx = await bridge.connect(bob).lock(to_chain_id, alice.address, token.address, token.address, 1002)
+    await tx.wait();
+
     const _id = soliditySha3(
       from_chain_id, to_chain_id,
       bob.address, alice.address,
       token.address, token.address,
       1002,
-      0
+      0,
+      await getTimestamp()
     );
 
-    await bridge.connect(bob).lock(to_chain_id, alice.address, token.address, token.address, 1002)
     await bridge.connect(bob).revert_request(_id);
 
     // event push
