@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 import "hardhat/console.sol";
 import {
@@ -32,7 +32,7 @@ contract Bridge is Ownable {
 
     //TODO: use openzepplin role library
   modifier onlyRelay {
-    require(msg.sender == relay);
+    require(msg.sender == relay, "bridge: only relay");
     _;
   }
 
@@ -71,14 +71,15 @@ contract Bridge is Ownable {
   // transfer record
   mapping(bytes32=>TransferRecord) public records;
 
-  function _generateId(uint from_chain_id, uint to_chain_id, address from_address, address to_address, address from_token, address to_token, uint amount, uint _counter) internal pure returns(bytes32) {
+  function _generateId(uint from_chain_id, uint to_chain_id, address from_address, address to_address, address from_token, address to_token, uint amount, uint _counter, uint timestamp) internal pure returns(bytes32) {
     bytes32 digest = keccak256(
       abi.encodePacked(
         from_chain_id, to_chain_id,
         from_address, to_address,
         from_token, to_token,
         amount,
-        _counter
+        _counter,
+	timestamp
       )
     );
     return digest;
@@ -88,7 +89,7 @@ contract Bridge is Ownable {
   function lock(uint to_chain_id, address to_address, address from_token, address to_token, uint amount) external {
     require(peer_balance > amount, "no sufficient peer balance");
 
-    bytes32 id = _generateId(block.chainid, to_chain_id, msg.sender, to_address, from_token, to_token, amount, counter);
+    bytes32 id = _generateId(block.chainid, to_chain_id, msg.sender, to_address, from_token, to_token, amount, counter, block.timestamp);
     TransferRecord memory rec = TransferRecord({
       id: id,
       from_chain_id: block.chainid,
@@ -106,12 +107,12 @@ contract Bridge is Ownable {
     counter += 1;
     SafeERC20.safeTransferFrom(IERC20(token), msg.sender, address(this), amount);
     emit LockEvent(id);
-    }
+  }
 
   function redeem(bytes32 id) external {
-    require(records[id].id != 0x0, "record not found");
-    require(records[id].state == TransferState.REVERTED, "invalid state");
-    require(msg.sender == records[id].from_address, "invalid user");
+    require(records[id].id != 0x0, "bridge: record not found");
+    require(records[id].state == TransferState.REVERTED, "bridge: invalid state");
+    require(msg.sender == records[id].from_address, "bridge: invalid user");
     records[id].state = TransferState.REDEEMED;
     SafeERC20.safeTransfer(IERC20(token), records[id].from_address, records[id].amount);
     }
@@ -133,7 +134,7 @@ contract Bridge is Ownable {
       peer_balance += records[id].amount;
   }
 
-  //TODO: check calldata
+  //TODO: check calldata usage again
   function handle_lock(TransferRecord calldata record) external onlyRelay {
     //TODO: perhaps hash id check here?
     peer_balance += record.amount;
@@ -159,7 +160,7 @@ contract Bridge is Ownable {
 
   function handle_revert_request(bytes32 id) external onlyRelay {
     require(records[id].id != 0x0, "record not found");
-    require(records[id].state == TransferState.LOCKED || records[id].state == TransferState.RELEASED, "invalid state");
+    require(records[id].state == TransferState.LOCKED || records[id].state == TransferState.RELEASED, "bridge: invalid state");
     if(records[id].state == TransferState.LOCKED) {
       peer_balance -= records[id].amount;
       records[id].state = TransferState.REVERTED;
@@ -172,6 +173,6 @@ contract Bridge is Ownable {
   function withdrawal(address) external onlyOwner {} // withrawal from owner
   function setRelay(address) external onlyOwner {} // set relay identity
   function setPeerBalance(uint amount) external onlyOwner { // manual balance
-    peer_balance = amount;
+	peer_balance = amount;
   }
 }
