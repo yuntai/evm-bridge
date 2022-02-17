@@ -59,13 +59,14 @@ contract Bridge is Ownable {
   event LockEvent(bytes32 indexed);
   event RevertRequestEvent(bytes32 indexed);
   event RevertResponseEvent(bytes32 indexed, TransferState);
+  event DepositEvent(uint amount);
 
   address relay;
   address token; // no need to be state var, but requires verification when lock()
   uint counter;
 
   // assumption under having a single peer chain and single type of token
-  // later map(chain -> map(token -> peer_balance) 
+  // later map(chain -> map(token -> peer_balance)
   uint public peer_balance;
 
   // transfer record
@@ -101,7 +102,6 @@ contract Bridge is Ownable {
       amount: amount,
       state: TransferState.LOCKED
     });
-
     peer_balance -= amount;
     records[id] = rec;
     counter += 1;
@@ -142,7 +142,11 @@ contract Bridge is Ownable {
     records[record.id].state = TransferState.LOCKED;
   }
 
-  //TODO: check reentry attack
+  function handle_deposit(uint amount) external onlyRelay {
+    peer_balance += amount;
+  }
+
+  //TODO: check reentry attack seems okay b/c state is set before transfer
   function release(bytes32 id) external {
     require(records[id].id != 0x0, "record not found");
     require(records[id].state == TransferState.LOCKED);
@@ -169,7 +173,16 @@ contract Bridge is Ownable {
   }
 
   function approve() external {} // approve bridge to spend msg.sender's token
-  function deposit() external onlyOwner {} // deposit token from owner
+
+  function deposit(uint amount) external onlyOwner {
+    SafeERC20.safeTransferFrom(IERC20(token), msg.sender, address(this), amount);
+    emit DepositEvent(amount);
+  }
+
+  function balance() external view onlyOwner returns(uint) {
+    return IERC20(token).balanceOf(address(this));
+  }
+
   function withdrawal(address) external onlyOwner {} // withrawal from owner
   function setRelay(address) external onlyOwner {} // set relay identity
   function setPeerBalance(uint amount) external onlyOwner { // manual balance
