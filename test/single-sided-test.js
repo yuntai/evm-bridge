@@ -23,11 +23,12 @@ describe("Single-sided", function () {
   let initialPeerBalance;
 
   // Bridge.TransferState
-  LOCKED = 0;
-  REVERT_REQUESTED = 1;
-  REVERTED = 2;
-  REDEEMED = 3;
-  RELEASED = 4;
+  // TODO: possible to read from contract?
+  LOCKED = 0,
+  REVERT_REQUESTED = 1,
+  REVERTED = 2,
+  REDEEMED = 3,
+  RELEASED = 4
 
   beforeEach(async function() {
     hre.changeNetwork('hardhat');
@@ -233,5 +234,10 @@ describe("Single-sided", function () {
 
     expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal - 1004);
     expect(await token.balanceOf(alice.address)).to.equal(aliceBegBal + 1004);
+  });
+
+  it("fund peer", async function() {
+    const tx = await bridge.connect(owner).deposit(101);
+    await expect(tx).to.emit(bridge, 'DepositEvent').withArgs(101);
   });
 });
