@@ -1,36 +1,37 @@
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
-const { soliditySha3 } = require("web3-utils");
+import { expect } from "chai";
+import { ethers } from "hardhat";
+import { soliditySha3 } from "web3-utils";
+import hre from 'hardhat';
+import { Contract, BigNumber } from "ethers";
+import { TransferState } from "./relay"
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
 //TODO: more negative test case
 //      check against onlyOwner, onlyRelay, to_address, from_address
 //      peer balance
 
 async function getTimestamp() {
-    const blockNumBefore = await ethers.provider.getBlockNumber();
-    const blockBefore = await ethers.provider.getBlock(blockNumBefore);
-    return blockBefore.timestamp;
+  const blockNumBefore = await ethers.provider.getBlockNumber();
+  const blockBefore = await ethers.provider.getBlock(blockNumBefore);
+  return blockBefore.timestamp;
 }
 
 describe("Single-sided", function () {
+  let token: Contract;
+  let bridge: Contract;
+  let to_chain_id: number,
+    from_chain_id: number;
 
-  let token;
-  let bridge;
-  let to_chain_id, from_chain_id;
+  let bridgeBegBal: BigNumber;
+  let bobBegBal: BigNumber;
+  let initialPeerBalance: BigNumber;
 
-  let bridgeBegBal;
-  let bobBegBal;
-  let initialPeerBalance;
+  let owner: SignerWithAddress,
+    bob: SignerWithAddress,
+    alice: SignerWithAddress,
+    relay: SignerWithAddress, _;
 
-  // Bridge.TransferState
-  // TODO: possible to read from contract?
-  LOCKED = 0,
-  REVERT_REQUESTED = 1,
-  REVERTED = 2,
-  REDEEMED = 3,
-  RELEASED = 4
-
-  beforeEach(async function() {
+  beforeEach(async function () {
     hre.changeNetwork('hardhat');
     [owner, bob, alice, relay, ..._] = await ethers.getSigners();
     const Token = await ethers.getContractFactory("Token");
@@ -50,14 +51,13 @@ describe("Single-sided", function () {
     token.connect(bob).approve(bridge.address, 10000);
 
     await bridge.setPeerBalance(100000)
-    //TODO: use bignumber?
-    initialPeerBalance = +(await bridge.peer_balance());
+    initialPeerBalance = await bridge.peer_balance();
 
     token.approve(bridge.address, 10000);
     token.transfer(bridge.address, 10000);
-    bridgeBegBal = +(await token.balanceOf(bridge.address));
 
-    bobBegBal = +(await token.balanceOf(bob.address));
+    bridgeBegBal = await token.balanceOf(bridge.address);
+    bobBegBal = await token.balanceOf(bob.address);
 
     to_chain_id = 7777;
     from_chain_id = 31337; // hardhat default chain id; TODO: how to access network config here
@@ -77,10 +77,10 @@ describe("Single-sided", function () {
     );
 
     await expect(tx).to.emit(bridge, 'LockEvent').withArgs(expectedId);
-    expect((await bridge.records(expectedId)).state).to.equal(LOCKED);
-    expect(await bridge.peer_balance()).to.equal(initialPeerBalance-1000);
-    expect(await token.balanceOf(bob.address)).to.equal(bobBegBal-1000);
-    expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal+1000);
+    expect((await bridge.records(expectedId)).state).to.equal(TransferState.LOCKED);
+    expect(await bridge.peer_balance()).to.equal(initialPeerBalance.sub(1000));
+    expect(await token.balanceOf(bob.address)).to.equal(bobBegBal.sub(1000));
+    expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal.add(1000));
   });
 
   it("Sender Lock & Revert", async function () {
@@ -96,11 +96,11 @@ describe("Single-sided", function () {
       await getTimestamp()
     );
     await expect(bridge.connect(bob).revert_request(_id)).to.emit(bridge, 'RevertRequestEvent').withArgs(_id);
-    await expect(bridge.records(_id).state == REVERT_REQUESTED);
+    await expect(bridge.records(_id).state == TransferState.REVERT_REQUESTED);
 
     // event push
-    await bridge.connect(relay).handle_revert_response(_id, REVERTED);
-    await expect(bridge.records(_id).state == REVERTED);
+    await bridge.connect(relay).handle_revert_response(_id, TransferState.REVERTED);
+    await expect(bridge.records(_id).state == TransferState.REVERTED);
     // peer balance restored
     expect(await bridge.peer_balance()).to.equal(initialPeerBalance);
   });
@@ -121,18 +121,18 @@ describe("Single-sided", function () {
     await bridge.connect(bob).revert_request(_id);
 
     // event push
-    await bridge.connect(relay).handle_revert_response(_id, REVERTED);
+    await bridge.connect(relay).handle_revert_response(_id, TransferState.REVERTED);
 
     //await bridge.redeem(_id); TODO: raise
     await bridge.connect(bob).redeem(_id);
-    await expect(bridge.records(_id).state == REDEEMED);
+    await expect(bridge.records(_id).state == TransferState.REDEEMED);
 
     expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal);
     expect(await token.balanceOf(bob.address)).to.equal(bobBegBal);
   });
 
   it("Receiver Lock & Release", async function () {
-    const aliceBegBal = +(await token.balanceOf(alice.address));
+    const aliceBegBal: BigNumber = await token.balanceOf(alice.address);
 
     const _id = soliditySha3(
       from_chain_id, to_chain_id,
@@ -151,23 +151,23 @@ describe("Single-sided", function () {
       from_token: token.address,
       to_token: token.address,
       amount: 1002,
-      state: LOCKED
+      state: TransferState.LOCKED
     }
 
     // invoke lock event handler
     await bridge.connect(relay).handle_lock(transferRecord);
     const x = await bridge.peer_balance()
-    expect(await bridge.peer_balance()).to.equal(initialPeerBalance+1002);
-    await expect(bridge.records(_id).state == LOCKED);
+    expect(await bridge.peer_balance()).to.equal(initialPeerBalance.add(1002));
+    await expect(bridge.records(_id).state == TransferState.LOCKED);
 
     await bridge.connect(alice).release(_id)
 
-    expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal-1002);
-    expect(await token.balanceOf(alice.address)).to.equal(aliceBegBal+1002);
+    expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal.sub(1002));
+    expect(await token.balanceOf(alice.address)).to.equal(aliceBegBal.add(1002));
   });
 
   it("Receiver Lock & Revert Success", async function () {
-    const aliceBegBal = +(await token.balanceOf(alice.address));
+    const aliceBegBal: BigNumber = await token.balanceOf(alice.address);
 
     const _id = soliditySha3(
       from_chain_id, to_chain_id,
@@ -186,22 +186,22 @@ describe("Single-sided", function () {
       from_token: token.address,
       to_token: token.address,
       amount: 1003,
-      state: LOCKED
+      state: TransferState.LOCKED
     }
 
     // invoke lock event handler
     await bridge.connect(relay).handle_lock(transferRecord);
     await expect(bridge.connect(relay).handle_revert_request(_id))
       .to.emit(bridge, 'RevertResponseEvent')
-      .withArgs(_id, REVERTED);
-    await expect(bridge.records(_id).state == REVERTED);
+      .withArgs(_id, TransferState.REVERTED);
+    await expect(bridge.records(_id).state == TransferState.REVERTED);
 
     expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal);
     expect(await token.balanceOf(alice.address)).to.equal(aliceBegBal);
   });
 
   it("Receiver Lock & Revert Failure", async function () {
-    const aliceBegBal = +(await token.balanceOf(alice.address));
+    const aliceBegBal: BigNumber = await token.balanceOf(alice.address);
 
     const _id = soliditySha3(
       from_chain_id, to_chain_id,
@@ -220,7 +220,7 @@ describe("Single-sided", function () {
       from_token: token.address,
       to_token: token.address,
       amount: 1004,
-      state: LOCKED
+      state: TransferState.LOCKED
     }
 
     // invoke lock event handler
@@ -229,14 +229,14 @@ describe("Single-sided", function () {
 
     await expect(bridge.connect(relay).handle_revert_request(_id))
       .to.emit(bridge, 'RevertResponseEvent')
-      .withArgs(_id, RELEASED);
-    await expect(bridge.records(_id).state == RELEASED);
+      .withArgs(_id, TransferState.RELEASED);
+    await expect(bridge.records(_id).state == TransferState.RELEASED);
 
-    expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal - 1004);
-    expect(await token.balanceOf(alice.address)).to.equal(aliceBegBal + 1004);
+    expect(await token.balanceOf(bridge.address)).to.equal(bridgeBegBal.sub(1004));
+    expect(await token.balanceOf(alice.address)).to.equal(aliceBegBal.add(1004));
   });
 
-  it("fund peer", async function() {
+  it("fund peer", async function () {
     const tx = await bridge.connect(owner).deposit(101);
     await expect(tx).to.emit(bridge, 'DepositEvent').withArgs(101);
   });
