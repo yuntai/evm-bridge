@@ -58,8 +58,8 @@ contract Bridge is Ownable {
 
   event LockEvent(bytes32 indexed);
   event RevertRequestEvent(bytes32 indexed);
-  event RevertResponseEvent(bytes32 indexed, TransferState);
-  event DepositEvent(uint amount);
+  event RevertResponseEvent(bytes32 indexed, TransferState indexed);
+  event SupplyEvent(uint amount);
 
   address relay;
   address token; // no need to be state var, but requires verification when lock()
@@ -142,7 +142,7 @@ contract Bridge is Ownable {
     records[record.id].state = TransferState.LOCKED;
   }
 
-  function handle_deposit(uint amount) external onlyRelay {
+  function handle_supply(uint amount) external onlyRelay {
     peer_balance += amount;
   }
 
@@ -153,10 +153,10 @@ contract Bridge is Ownable {
     require(msg.sender == records[id].to_address, "bridge: invalid user");
     //TODO: require msg to "bridge: {msg}"
     records[id].state = TransferState.RELEASED;
-    uint256 MAX_INT = 2**256 - 1;
+    //uint256 MAX_INT = 2**256 - 1;
     //TODO: approve maximum?
     //TODO: approve & transfer?
-    SafeERC20.safeApprove(IERC20(records[id].to_token), address(this), MAX_INT);
+    SafeERC20.safeApprove(IERC20(records[id].to_token), address(this), type(uint).max);
     SafeERC20.safeTransferFrom(IERC20(records[id].to_token), address(this), records[id].to_address, records[id].amount);
     //TODO: use safeIncreaseAllownce/safeDecreaseAllownce
     //tODO: change all to release[id].{from/to}_token instead of using state 'token' var
@@ -174,9 +174,9 @@ contract Bridge is Ownable {
 
   function approve() external {} // approve bridge to spend msg.sender's token
 
-  function deposit(uint amount) external onlyOwner {
+  function supply(uint amount) external onlyOwner {
     SafeERC20.safeTransferFrom(IERC20(token), msg.sender, address(this), amount);
-    emit DepositEvent(amount);
+    emit SupplyEvent(amount);
   }
 
   function balance() external view onlyOwner returns(uint) {
