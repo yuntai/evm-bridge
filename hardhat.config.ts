@@ -2,6 +2,7 @@ import { task } from "hardhat/config";
 import "@nomiclabs/hardhat-waffle";
 import "@nomiclabs/hardhat-web3";
 import "hardhat-change-network";
+import "./tasks/sampleTask";
 
 // genearted with `node scripts/gen-address.js`
 // polygon faucet `https://faucet.polygon.technology/`
@@ -75,6 +76,8 @@ export default {
       url: 'https://rpc-mumbai.maticvigil.com',
       chainId: 80001,
       accounts: ACCOUNTS1,
+      gas: 2100000,
+      gasPrice: 8000000000
     },
     binance_test: {
       url: "https://data-seed-prebsc-1-s1.binance.org:8545",
@@ -83,8 +86,11 @@ export default {
       accounts: ACCOUNTS2,
     },
     rinkeby: {
+      chainId: 4,
       url: "https://eth-rinkeby.alchemyapi.io/v2/fvk3umZQZCAvNpeKKQdVlnCC4wjooFGa",
       accounts: ACCOUNTS2,
+      gas: 2100000,
+      gasPrice: 8000000000
     },
 
 
