@@ -29,7 +29,7 @@ export class Relayer {
     // should be based on chainId but hardhat doesn't allow to configure chainId
     let routers: { [chain: string]: string } = { 'chain1': 'chain2', 'chain2': 'chain1' };
 
-    for (let evt of ['LockEvent', 'RevertRequestEvent', 'RevertResponseEvent', 'DepositEvent']) {
+    for (let evt of ['LockEvent', 'RevertRequestEvent', 'RevertResponseEvent', 'SupplyEvent']) {
       for (let b in this.bridges) {
         this.bridges[b].on(evt, (args: any) => {
 	  const target = this.bridges[routers[b]];
@@ -87,14 +87,13 @@ export class Relayer {
         await evt.target.connect(this.owner).handle_revert_response(evt.args, rec.state);
         break;
 
-      case 'DepositEvent':
+      case 'SupplyEvent':
         hre.changeNetwork(evt.to);
-        await evt.target.connect(this.owner).handle_deposit(evt.args);
+        await evt.target.connect(this.owner).handle_supply(evt.args);
         break;
 
       default:
-        console.log(`unknown event ${evt.name}.`);
-      //TOOD: assert(0)
+	throw new Error(`unknown event ${evt.name}.`);
     }
   }
 }

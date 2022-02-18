@@ -4,7 +4,7 @@ async function main() {
   hre.changeNetwork("mumbai");
   await stat('mumbai');
   hre.changeNetwork("rinkeby");
-  await stat('binance_test');
+  await stat('rinkeby');
 }
 
 async function stat(chain) {
@@ -20,20 +20,19 @@ async function stat(chain) {
     console.log("address=", n.address);
     console.log("balance=", balance);
 
-    if(n == owner && chain=='rinkeby') {
-      console.log("here!!!!!");
+    if(0 && n == owner && chain=='rinkeby') {
       console.log(balance.div(4));
       dist_amount = balance.div(4);
     }
   }
 
-  if(chain=='rinkeby' && 1) {
+  if(0 && chain=='rinkeby') {
     for(let to of [relay, bob, alice])  {
-      console.log("sending ${dist_amount} to ${to.address}");
-      //await owner.sendTransaction({
-      //  to: to.address,
-      //  value: ethers.utils.parseEther("1.0"), // Sends exactly 1.0 ether
-      //});
+      console.log(`sending ${dist_amount} to ${to.address}`);
+      await owner.sendTransaction({
+        to: to.address,
+        value: dist_amount
+      });
     }
   }
 

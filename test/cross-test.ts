@@ -229,8 +229,9 @@ describe("Cross Test", function () {
     const bridge2_peer_bal = (await chain2.bridge.peer_balance()).toNumber();
 
     hre.changeNetwork('chain1');
-    const tx = await chain1.bridge.connect(chain1.owner).deposit(121);
+    const tx = await chain1.bridge.connect(chain1.owner).supply(121);
     await tx.wait();
+
     await relayer.flush_events('chain1');
 
     expect(await chain1.token.balanceOf(chain1.bridge.address)).to.equal(bridge1_bal + 121);

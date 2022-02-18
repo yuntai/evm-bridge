@@ -237,7 +237,7 @@ describe("Single-sided", function () {
   });
 
   it("fund peer", async function () {
-    const tx = await bridge.connect(owner).deposit(101);
-    await expect(tx).to.emit(bridge, 'DepositEvent').withArgs(101);
+    const tx = await bridge.connect(owner).supply(101);
+    await expect(tx).to.emit(bridge, 'SupplyEvent').withArgs(101);
   });
 });
