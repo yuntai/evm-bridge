@@ -34,6 +34,7 @@ describe("Single-sided", function () {
   beforeEach(async function () {
     hre.changeNetwork('hardhat');
     [owner, bob, alice, relay, ..._] = await ethers.getSigners();
+
     const Token = await ethers.getContractFactory("Token");
     token = await Token.deploy();
     await token.deployed();
@@ -50,7 +51,9 @@ describe("Single-sided", function () {
 
     token.connect(bob).approve(bridge.address, 10000);
 
-    await bridge.setPeerBalance(100000)
+    await token.connect(owner).increaseAllowance(bridge.address, 100000);
+    await bridge.supply(100000)
+    await (await bridge.connect(relay).handle_supply(10000));
     initialPeerBalance = await bridge.peer_balance();
 
     token.approve(bridge.address, 10000);
@@ -61,6 +64,17 @@ describe("Single-sided", function () {
 
     to_chain_id = 7777;
     from_chain_id = 31337; // hardhat default chain id; TODO: how to access network config here
+  });
+
+  it("supply", async function() {
+      const tx = await bridge.supply(105);
+      await expect(tx).to.emit(bridge, 'SupplyEvent').withArgs(105);
+  });
+
+  it("handle supply", async function() {
+      const peerBalance = (await bridge.peer_balance()).toNumber();
+      await (await bridge.connect(relay).handle_supply(106));
+      expect((await bridge.peer_balance()).toNumber()).to.equal(peerBalance+106);
   });
 
   it("Sender Lock", async function () {
@@ -156,9 +170,8 @@ describe("Single-sided", function () {
 
     // invoke lock event handler
     await bridge.connect(relay).handle_lock(transferRecord);
-    const x = await bridge.peer_balance()
     expect(await bridge.peer_balance()).to.equal(initialPeerBalance.add(1002));
-    await expect(bridge.records(_id).state == TransferState.LOCKED);
+    expect((await bridge.records(_id)).state == TransferState.LOCKED);
 
     await bridge.connect(alice).release(_id)
 

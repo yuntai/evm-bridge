@@ -2,12 +2,14 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { Contract, Signer } from "ethers";
 import { ethers, config as hreConfig } from "hardhat";
-import { Relayer, TransferState } from "./relay";
+import { Relayer, RelayConfig } from "../tasks/relay";
+import { TransferState } from "../tasks/common";
 import hre from 'hardhat';
 
 interface ChainConfig {
   name: string,
   owner: SignerWithAddress,
+  relayOwner: SignerWithAddress,
   bob: SignerWithAddress,
   alice: SignerWithAddress,
   bridge: Contract,
@@ -18,14 +20,12 @@ interface ChainConfig {
 describe("Cross Test", function () {
   let chain1: ChainConfig;
   let chain2: ChainConfig;
-
-  let relayOwner: SignerWithAddress;
   let relayer: Relayer;
 
   async function initialize(chain: string, accounts: SignerWithAddress[]): Promise<ChainConfig> {
     hre.changeNetwork(chain);
 
-    const [owner, bob, alice, ..._] = accounts;
+    const [owner, relayOwner, bob, alice, ..._] = accounts;
 
     const Token = await ethers.getContractFactory("Token");
     const token = await Token.connect(owner).deploy();
@@ -38,6 +38,7 @@ describe("Cross Test", function () {
     const chainConfig: ChainConfig = {
       name: chain,
       owner: owner,
+      relayOwner: relayOwner,
       bob: bob,
       alice: alice,
       bridge: bridge,
@@ -45,13 +46,10 @@ describe("Cross Test", function () {
       chainId: 31337
     }
 
-    token.connect(owner).approve(bob.address, 10000);
-    token.connect(owner).transfer(bob.address, 10000);
+    await token.connect(owner).approve(bob.address, 10000);
+    await token.connect(owner).transfer(bob.address, 10000);
 
-    token.connect(owner).approve(bridge.address, 10000);
-    token.connect(owner).transfer(bridge.address, 10000);
-
-    await bridge.setPeerBalance(100000);
+    await token.connect(owner).approve(bridge.address, 100000);
 
     const provider = bridge.provider;
     // @ts-ignore:next-line
@@ -64,14 +62,29 @@ describe("Cross Test", function () {
     // 20 accounts same for both chains
     let accounts = await ethers.getSigners();
 
-    relayOwner = accounts[1];
-
-    accounts = accounts.slice(2, 20);
-
     chain1 = await initialize('chain1', accounts.slice(0, 9));
     chain2 = await initialize('chain2', accounts.slice(9));
 
-    relayer = new Relayer(relayOwner, { [chain1.name]: chain1.bridge, [chain2.name]: chain2.bridge });
+    const relayConfig: RelayConfig = {
+      chain1: 'chain1',
+      chain2: 'chain2',
+      relayOwner1: chain1.relayOwner,
+      relayOwner2: chain2.relayOwner,
+      bridge1: chain1.bridge,
+      bridge2: chain2.bridge
+    }
+
+    relayer = new Relayer(relayConfig, hre, true);
+
+    hre.changeNetwork('chain1');
+    let tx = await chain1.bridge.connect(chain1.owner).supply(100000);
+    await tx.wait();
+    await relayer.flush_events('chain1');
+
+    hre.changeNetwork('chain2');
+    tx = await chain2.bridge.connect(chain2.owner).supply(100000);
+    await tx.wait();
+    await relayer.flush_events('chain2');
   });
 
   it("Lock & Release", async function () {
@@ -220,7 +233,7 @@ describe("Cross Test", function () {
 
   it("deoposit", async function () {
     hre.changeNetwork('chain1');
-    await chain1.token.connect(chain1.bob).approve(chain1.bridge.address, 10000);
+    await chain1.token.connect(chain1.owner).approve(chain1.bridge.address, 10000);
     const bridge1_bal = (await chain1.token.balanceOf(chain1.bridge.address)).toNumber();
     const bridge1_peer_bal = (await chain1.bridge.peer_balance()).toNumber();
 
