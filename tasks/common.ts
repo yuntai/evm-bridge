@@ -54,7 +54,10 @@ export function saveConfig(cfg: ChainConfig, chain: string) {
 export async function loadConfig(hre: any, chain: string) {
   hre.changeNetwork(chain);
   const p = path.resolve(__dirname, `../cfgs/${chain}.json`);
-  const data = fs.readFileSync(p, { encoding: 'utf8', flag: 'r' });
+  let data = '';
+  if (fs.existsSync(p)) {
+    data = fs.readFileSync(p, { encoding: 'utf8', flag: 'r' });
+  }
   let token, bridge;
 
   if (data.length > 0) {
