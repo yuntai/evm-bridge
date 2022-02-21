@@ -27,6 +27,8 @@
   "dependencies": {
     "@openzeppelin/contracts": "^4.5.0",
     "console-table-printer": "^2.10.0",
+    "dotenv": "^16.0.0",
+    "ethereumjs-wallet": "^1.0.2",
     "hardhat-change-network": "^0.0.7"
   }
 }
