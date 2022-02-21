@@ -1,13 +1,7 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { Contract } from "ethers";
+import { getStateName } from "./common";
 
-export enum TransferState {
-  LOCKED,
-  REVERT_REQUESTED,
-  REVERTED,
-  REDEEMED,
-  RELEASED
-}
 
 export interface RelayConfig {
   chain1: string,
@@ -50,7 +44,16 @@ export class Relayer {
       [cfg.chain2]: cfg.chain1
     }
 
-    for (let evtName of ['LockEvent', 'RevertRequestEvent', 'RevertResponseEvent', 'SupplyEvent']) {
+    console.log(`[${cfg.chain1}]`);
+    console.log(`relayOwner: ${cfg.relayOwner1.address}`)
+    console.log(`bridge: ${cfg.bridge1.address}`)
+
+    console.log(`[${cfg.chain2}]`);
+    console.log(`relayOwner: ${cfg.relayOwner2.address}`)
+    console.log(`bridge: ${cfg.bridge2.address}`)
+
+    const EVENTS = ['LockEvent', 'RevertRequestEvent', 'RevertResponseEvent', 'SupplyEvent', 'ReleaseEvent', 'RedeemEvent'];
+    for (let evtName of EVENTS) {
       for (let b in this.bridges) {
         this.bridges[b].on(evtName, (args: any) => {
           const target = this.bridges[routers[b]];
@@ -104,30 +107,30 @@ export class Relayer {
     switch (evt.name) {
       case 'LockEvent':
         rec = await this.get_record(evt.from, evt.args);
-        console.log(`${evt.name} from(${evt.from}) to(${evt.to}) id(${rec.id}) amt(${rec.amount})`);
+        console.log(`${evt.name}(${evt.from}->${evt.to}) id(${rec.id}) amt(${rec.amount})`);
         this.hre.changeNetwork(evt.to);
         tx = await evt.target.connect(this.owners[evt.to]).handle_lock(rec);
-        console.log(`  handle_lock() tx(${tx.hash})`);
         receipt = await tx.wait();
+        console.log(`  handle_lock() tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');
         break;
 
       case 'RevertRequestEvent':
-        console.log(`${evt.name} from(${evt.from}) to(${evt.to}) id(${evt.args})`);
+        console.log(`${evt.name}(${evt.from}->${evt.to}) id(${evt.args})`);
         this.hre.changeNetwork(evt.to);
         tx = await evt.target.connect(this.owners[evt.to]).handle_revert_request(evt.args);
-        console.log(`  handle_revert_request() tx(${tx.hash})`);
         receipt = await tx.wait();
+        console.log(`  handle_revert_request() tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');
         break;
 
       case 'RevertResponseEvent':
         rec = await this.get_record(evt.from, evt.args);
-        console.log(`${evt.name} from(${evt.from}) to(${evt.to}) id(${evt.args}) state(${rec.state})`);
+        console.log(`${evt.name} (${evt.from}->${evt.to}) id(${evt.args}) state(${getStateName(rec.state)})`);
         this.hre.changeNetwork(evt.to);
         tx = await evt.target.connect(this.owners[evt.to]).handle_revert_response(evt.args, rec.state);
-        console.log(`  handle_revert_response() tx(${tx.hash})`);
         receipt = await tx.wait();
+        console.log(`  handle_revert_response() tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');
         break;
 
@@ -135,9 +138,16 @@ export class Relayer {
         this.hre.changeNetwork(evt.to);
         console.log(`${evt.name}(${evt.args}) from(${evt.from}) to(${evt.to}) amt(${evt.args})`);
         tx = await evt.target.connect(this.owners[evt.to]).handle_supply(evt.args);
-        console.log(`  handle_supply() tx(${tx.hash})`);
         receipt = await tx.wait();
+        console.log(`  handle_supply() tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');
+        break;
+
+      // non-routing events
+      case 'ReleaseEvent':
+      case 'RedeemEvent':
+        //TODO: get amount
+        console.log(`${evt.name}(${evt.from}) id(${evt.args})`);
         break;
 
       default:
