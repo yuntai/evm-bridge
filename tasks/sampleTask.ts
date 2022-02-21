@@ -18,21 +18,25 @@ function getAddress(cfg: ChainConfig, _k: any): any {
 // Polygon: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 (proxy?)
 // 0xDD9185DB084f5C4fFf3b4f70E7bA62123b812226
 
-//task("setTokenAddress")
-//  .addParam("chain", "chain")
-//  .addParam("address", "set token address")
-//  .setAction(async (taskArgs, hre) => {
-//    let cfg = await loadConfig(hre, taskArgs.chain);
-//    hre.changeNetwork(taskArgs.chain);
-//    const token = await hre.ethers.getContractAt("Token", taskArgs.address);
-//    console.log("token address:", token.address);
-//    console.log(`name: ${await token.name()}`);
-//    console.log(`symbol: ${await token.symbol()}`);
-//    //console.log("total supply:", hre.ethers.utils.formatUnits(await token.totalSupply()));
-//    cfg.token = token;
-//    saveConfig(cfg, taskArgs.chain);
-//  });
+// deploy existing token (e.g. USDC)
+// TODO: not working!
+task("setTokenAddress")
+  .addParam("chain", "chain")
+  .addParam("address", "set token address")
+  .setAction(async (taskArgs, hre) => {
+    let cfg = await loadConfig(hre, taskArgs.chain);
+    hre.changeNetwork(taskArgs.chain);
+    const token = await hre.ethers.getContractAt("ERC20", taskArgs.address);
+    console.log("token address:", token.address);
+    console.log(`name: ${await token.name()}`);
+    console.log(await token.balanceOf(cfg.owner.address));
+    //console.log(`symbol: ${await token.symbol()}`);
+    //console.log("total supply:", hre.ethers.utils.formatUnits(await token.totalSupply()));
+    cfg.token = token;
+    saveConfig(cfg, taskArgs.chain);
+  });
 
+// deploy our token
 task("deployToken")
   .addParam("chain", "chain")
   .setAction(async (taskArgs, hre) => {
@@ -70,15 +74,17 @@ task("stat", "show network account status")
     let cfg = await loadConfig(hre, taskArgs.chain);
     await printConfig(cfg, hre);
     if (cfg.bridge) {
+      const token_address = await cfg.bridge.token();
+      const relay_address = await cfg.bridge.relay();
       console.log("bridge configuration")
       console.log("--------------------")
-      console.log("token address:", await cfg.bridge.token());
-      console.log("relay owner:", await cfg.bridge.relay());
+      console.log("token address:", token_address);
+      console.log("relay owner:", relay_address);
       console.log("peer balance:", (await cfg.bridge.connect(cfg.owner).peer_balance()).toNumber());
     }
   });
 
-task("sendtoken", "Send token from owner to others")
+task("sendToken", "Send token from owner to others")
   .addParam('chain', 'chain')
   .addParam("to", "nickname(relayOnwer, bob or alice) or address")
   .addParam("amount", "amount of tokens to transfer")
@@ -93,7 +99,7 @@ task("sendtoken", "Send token from owner to others")
     console.log(`account(${to}) from ${fromBal.toString()} to ${toBal.toString()}`)
   });
 
-task("sendether", "Send ether from owner to others")
+task("sendEther", "Send ether from owner to others")
   .addParam('chain', 'chain')
   .addParam("to", "nickname(relayOnwer, bob or alice) or address")
   .addParam("amount", "amount of ether")
@@ -114,7 +120,7 @@ task("sendether", "Send ether from owner to others")
     console.log(`balance from ${fromBal.toString()} to ${toBal.toString()}`)
   });
 
-task("txstatus", "transaction status")
+task("txStatus", "transaction status")
   .addParam("chain", "chain")
   .addParam("id", "id of transaction")
   .setAction(async (taskArgs, hre) => {
@@ -125,17 +131,7 @@ task("txstatus", "transaction status")
     console.log(rec);
   });
 
-task("bridgestatus", "bridge balance status")
-  .addParam("chain", "chain")
-  .setAction(async (taskArgs, hre) => {
-    const ethers = hre.ethers;
-    let cfg = await loadConfig(hre, taskArgs.chain);
-    console.log("peer balance=", (await cfg.bridge.connect(cfg.owner).peer_balance()).toNumber());
-    console.log("token balance=", (await cfg.token.balanceOf(cfg.bridge.address)).toNumber());
-  });
-
-
-task("supplybridge", "Supply token to bridge from owner")
+task("supplyBridge", "Supply token to bridge from owner")
   .addParam("chain", "chain")
   .addParam("amount", "amount of tokens")
   .setAction(async (taskArgs, hre) => {
