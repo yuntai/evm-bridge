@@ -2,7 +2,6 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { Contract } from "ethers";
 import { getStateName } from "./common";
 
-
 export interface RelayConfig {
   chain1: string,
   chain2: string,
@@ -10,6 +9,8 @@ export interface RelayConfig {
   relayOwner2: SignerWithAddress,
   bridge1: Contract,
   bridge2: Contract,
+  decimals1: number,
+  decimals2: number,
 }
 
 interface Event {
@@ -25,6 +26,7 @@ export class Relayer {
   bridges: { [chain: string]: Contract }
   events: { [chain: string]: Event[] } = { chain1: [], chain2: [] };
   hre: any;
+  decChanger: any;
 
   constructor(cfg: RelayConfig, hre: any, localTestMode: boolean = false) {
     this.hre = hre;
@@ -44,13 +46,44 @@ export class Relayer {
       [cfg.chain2]: cfg.chain1
     }
 
+    //chain1: decimal=18
+    //chain2: decimal=6
+    // dollar amount = $3
+    // chain1:  3 * 1e18
+    // chain2:  3 * 1e6
+    // amt from chain1: 3 * 1e18
+    // dec2 - dec1 = 6 - 18 = -12
+    // amt in chain2: 3 * 1e18 * 1e-12) = 3 * 1e6
+
+    const BigNumber = hre.ethers.BigNumber;
+    const ten = BigNumber.from(10);
+    //TODO: fugly refactor
+    this.decChanger = {
+      [cfg.chain1]: (amt: any) => {
+	if(cfg.decimals2 - cfg.decimals1 < 0) {
+		return BigNumber.from(amt).div(ten.pow(cfg.decimals1 - cfg.decimals2))
+	} else {
+		return BigNumber.from(amt).mul(ten.pow(cfg.decimals2 - cfg.decimals1))
+	}
+      },
+      [cfg.chain2]: (amt: any) => {
+		if(cfg.decimals1 - cfg.decimals2 < 0) {
+			return BigNumber.from(amt).div(ten.pow(cfg.decimals2 - cfg.decimals1))
+		} else {
+			return BigNumber.from(amt).mul(ten.pow(cfg.decimals1 - cfg.decimals2))
+		}
+      }
+    };
+
     console.log(`[${cfg.chain1}]`);
-    console.log(`relayOwner: ${cfg.relayOwner1.address}`)
-    console.log(`bridge: ${cfg.bridge1.address}`)
+    console.log(`relayOwner: ${cfg.relayOwner1.address} `)
+    console.log(`bridge: ${cfg.bridge1.address} `)
 
     console.log(`[${cfg.chain2}]`);
-    console.log(`relayOwner: ${cfg.relayOwner2.address}`)
-    console.log(`bridge: ${cfg.bridge2.address}`)
+    console.log(`relayOwner: ${cfg.relayOwner2.address} `)
+    console.log(`bridge: ${cfg.bridge2.address} `)
+
+    this.hre.changeNetwork(cfg.chain1);
 
     const EVENTS = ['LockEvent', 'RevertRequestEvent', 'RevertResponseEvent', 'SupplyEvent', 'ReleaseEvent', 'RedeemEvent'];
     for (let evtName of EVENTS) {
@@ -107,7 +140,9 @@ export class Relayer {
     switch (evt.name) {
       case 'LockEvent':
         rec = await this.get_record(evt.from, evt.args);
-        console.log(`${evt.name}(${evt.from}->${evt.to}) id(${rec.id}) amt(${rec.amount})`);
+        const newAmount = this.decChanger[evt.from](rec.amount);
+        console.log(`${evt.name} (${evt.from} -> ${evt.to}) id(${rec.id}) amt(${rec.amount}) toAmt(${newAmount})`);
+        rec.amount = newAmount;
         this.hre.changeNetwork(evt.to);
         tx = await evt.target.connect(this.owners[evt.to]).handle_lock(rec);
         receipt = await tx.wait();
@@ -116,7 +151,7 @@ export class Relayer {
         break;
 
       case 'RevertRequestEvent':
-        console.log(`${evt.name}(${evt.from}->${evt.to}) id(${evt.args})`);
+        console.log(`${evt.name} (${evt.from} -> ${evt.to}) id(${evt.args})`);
         this.hre.changeNetwork(evt.to);
         tx = await evt.target.connect(this.owners[evt.to]).handle_revert_request(evt.args);
         receipt = await tx.wait();
@@ -126,7 +161,7 @@ export class Relayer {
 
       case 'RevertResponseEvent':
         rec = await this.get_record(evt.from, evt.args);
-        console.log(`${evt.name} (${evt.from}->${evt.to}) id(${evt.args}) state(${getStateName(rec.state)})`);
+        console.log(`${evt.name} (${evt.from} -> ${evt.to}) id(${evt.args}) state(${getStateName(rec.state)})`);
         this.hre.changeNetwork(evt.to);
         tx = await evt.target.connect(this.owners[evt.to]).handle_revert_response(evt.args, rec.state);
         receipt = await tx.wait();
@@ -135,9 +170,11 @@ export class Relayer {
         break;
 
       case 'SupplyEvent':
+        const fromAmt = evt.args;
+        const toAmt = this.decChanger[evt.from](fromAmt);
         this.hre.changeNetwork(evt.to);
-        console.log(`${evt.name}(${evt.args}) from(${evt.from}) to(${evt.to}) amt(${evt.args})`);
-        tx = await evt.target.connect(this.owners[evt.to]).handle_supply(evt.args);
+        console.log(`${evt.name} from(${evt.from}) to(${evt.to}) amt(${fromAmt}) toAmt(${toAmt})`);
+        tx = await evt.target.connect(this.owners[evt.to]).handle_supply(toAmt);
         receipt = await tx.wait();
         console.log(`  handle_supply() tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');
@@ -147,7 +184,7 @@ export class Relayer {
       case 'ReleaseEvent':
       case 'RedeemEvent':
         //TODO: get amount
-        console.log(`${evt.name}(${evt.from}) id(${evt.args})`);
+        console.log(`${evt.name} (${evt.from}) id(${evt.args})`);
         break;
 
       default:

@@ -4,20 +4,31 @@ import { printTable } from 'console-table-printer';
 import { Contract } from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
+export const IERC20_ABI = [
+  "function decimals() view returns (uint8)",
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function balanceOf(address) view returns (uint256)",
+  "function transfer(address,uint256)",
+  "function increaseAllowance(address,uint256)"
+]
+
 export interface ChainConfig {
   token: Contract | undefined,
   bridge: Contract | undefined,
   owner: SignerWithAddress,
   relayOwner: SignerWithAddress,
   bob: SignerWithAddress,
-  alice: SignerWithAddress,
+  alice: SignerWithAddress
 }
 
 export async function printConfig(cfg: ChainConfig, hre: any) {
   let getBalance = ((address: string | undefined) => hre.ethers.provider.getBalance(address));
   let getTokenBalance = ((address: string | undefined) => cfg.token?.balanceOf(address));
 
+  //TODO(PERF): duplicated calls
   const decimals = await cfg.token?.decimals();
+  const symbol = await cfg.token?.symbol();
 
   const tbls = [];
   let k: keyof ChainConfig;
@@ -30,7 +41,7 @@ export async function printConfig(cfg: ChainConfig, hre: any) {
         account: k,
         address: cfg[k]?.address,
         value: bal.toString() + ' (' + hre.ethers.utils.formatEther(bal) + ')',
-        token: tokenBal ? tokenBal.toString() + ' (' + hre.ethers.utils.formatUnits(tokenBal?.toString(), decimals) + ')' : '',
+        [symbol]: tokenBal ? tokenBal.toString() + ' (' + hre.ethers.utils.formatUnits(tokenBal?.toString(), decimals) + ')' : '',
       });
     }
   }
@@ -63,11 +74,14 @@ export async function loadConfig(hre: any, chain: string) {
   if (data.length > 0) {
     const cfg = JSON.parse(data)
     if (cfg.token_address) {
-      token = await hre.ethers.getContractAt("ERC20", cfg.token_address);
+      token = await hre.ethers.getContractAt(IERC20_ABI, cfg.token_address);
     }
-    if (cfg.bridge_address)
+    if (cfg.bridge_address) {
       bridge = await hre.ethers.getContractAt("Bridge", cfg.bridge_address);
+    }
   }
+
+  const decimals = await token.decimals();
 
   const [owner, relay, bob, alice, ..._] = await hre.ethers.getSigners();
 
@@ -77,7 +91,7 @@ export async function loadConfig(hre: any, chain: string) {
     owner: owner,
     relayOwner: relay,
     bob: bob,
-    alice: alice,
+    alice: alice
   }
 }
 
