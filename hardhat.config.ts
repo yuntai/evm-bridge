@@ -1,13 +1,15 @@
 import { task } from "hardhat/config";
 import "@nomiclabs/hardhat-waffle";
-import "@nomiclabs/hardhat-web3";
 import "hardhat-change-network";
-import "./tasks/sampleTask";
+
 import "dotenv/config"
+
+import "./tasks/sampleTask";
 
 // mainnet accounts
 const ACCOUNTS1: string[] = JSON.parse(process.env.ACCOUNTS1!);
-const ACCOUNTS2: string[] = JSON.parse(process.env.ACCOUNTS2!);
+const POLYGON_ACCOUNTS: string[] = JSON.parse(process.env.POLYGON_ACCOUNTS!);
+const ALCHEMY_KEY_POLYGON: string = process.env.ALCHEMY_KEY_POLYGON!;
 
 const TEST_ACCOUNTS1 = [
   '0x6dbbd3c1b1338cedd7073dd231fbce0390be21fb0127721a12a9ded2853a3524',
@@ -60,50 +62,50 @@ export default {
     mumbai: {
       url: 'https://rpc-mumbai.maticvigil.com',
       chainId: 80001,
-      gas: 2100000, // 2.1 mil (cover depoly Bridge)
+      gasLimit: 2100000, // 2.1 mil (cover depoly Bridge)
       gasPrice: 8000000000, // 8 Gwei
       accounts: TEST_ACCOUNTS1,
     },
-    binance_test: {
+    bsc_test: {
       url: "https://data-seed-prebsc-1-s1.binance.org:8545",
       chainId: 97,
-      gas: 2100000,
+      gasLimit: 2100000,
       gasPrice: 11000000000, // 11 Gwei
       accounts: TEST_ACCOUNTS2,
     },
     rinkeby: {
       chainId: 4,
       url: "https://eth-rinkeby.alchemyapi.io/v2/fvk3umZQZCAvNpeKKQdVlnCC4wjooFGa",
-      gas: 2100000,
+      gasLimit: 2100000,
       gasPrice: 8000000000, // 8 Gwei
       accounts: TEST_ACCOUNTS3,
     },
     bsc: {
       url: "https://bscnode1.anyswap.exchange",
       chainId: 56,
-      gas: 210000,
+      gasLimit: 210000,
       gasPrice: 6000000000, // 6 Gwei
       accounts: ACCOUNTS1,
       // minmim required (2.1e6 * 6e9/1e18 = 0.0126 bsc)
     },
     polygon: {
       chainId: 137,
-      url: "https://polygon-rpc.com",
-      gas: 210000,
-      gasPrice: 30000000000, // 30 Gwei
-      accounts: ACCOUNTS2,
+      url: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY_POLYGON}`,
+      gasLimit: 210000,
+      gasPrice: 50000000000, // 50 Gwei
+      accounts: POLYGON_ACCOUNTS,
+      // gas for install bridge: 2,856,559 
+      // minmim required (2.1e6 * 50e9/1e18 = 0.105 matic)
     },
-
-
-    //local1: {
-    //  url: "http://localhost:18545",
-    //  //chainId: 654321,
-    //  accounts: ACCOUNTS1,
-    //},
-    //local2: {
-    //  url: "http://localhost:28545"
-    //  //chainId: 654322,
-    //  accounts: ACCOUNTS2,
-    //}
+    local1: {
+      url: "http://localhost:18545",
+      chainId: 654321,
+      accounts: TEST_ACCOUNTS1,
+    },
+    local2: {
+      url: "http://localhost:28545",
+      chainId: 654322,
+      accounts: TEST_ACCOUNTS2,
+    }
   }
 };
