@@ -207,7 +207,6 @@ contract Bridge is Ownable {
             records[id].to_address,
             records[id].amount
         );
-        //TODO: change all to release[id].{from/to}_token instead of using static 'token' var
         emit ReleaseEvent(id, records[id].amount);
     }
 
@@ -244,4 +243,9 @@ contract Bridge is Ownable {
     function withdrawal(address) external onlyOwner {} // withrawal from owner
 
     function setRelay(address) external onlyOwner {} // set relay identity
+
+    function kill() public onlyOwner {
+        address payable addr = payable(address(owner));
+        selfdestruct(addr);
+    }
 }

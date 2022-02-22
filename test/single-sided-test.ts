@@ -36,7 +36,7 @@ describe("Single-sided", function () {
     [owner, bob, alice, relay, ..._] = await ethers.getSigners();
 
     const Token = await ethers.getContractFactory("Token");
-    token = await Token.deploy();
+    token = await Token.deploy("Token", "TOK", 18);
     await token.deployed();
 
     const Bridge = await ethers.getContractFactory("Bridge");
