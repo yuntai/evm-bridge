@@ -1,7 +1,7 @@
 import { task } from "hardhat/config";
 import { loadConfig, saveConfig, printConfig, ChainConfig, TransferState, getStateName, IERC20_ABI } from './common';
 import { Relayer, RelayConfig } from './relay';
-import { soliditySha3 } from "web3-utils";
+import { addRecord, dumpRecords } from "./db";
 
 //TODO: gas fee
 //TODO: tx cancellation
@@ -243,6 +243,12 @@ task("supplyBridge", "Supply token to bridge from owner")
     tx = await cfg.bridge.connect(cfg.owner).supply(amt);
     console.log(`supply bridge amt(${amt.toString()}) tx(${tx.hash})`)
     await tx.wait();
+  });
+
+task("dumpdb", "dumpdb")
+  .setAction(async (taskArgs, hre) => {
+    //await addRecord("0xaa", "from", "to", "from_a", "to_a", 0.1);
+    console.log(await dumpRecords());
   });
 
 task("launchRelay", "Launc relay")

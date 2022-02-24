@@ -1,6 +1,7 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { Contract } from "ethers";
 import { getStateName } from "./common";
+import { addRecord, updateState } from "./db";
 
 export interface RelayConfig {
   chain1: string,
@@ -60,18 +61,18 @@ export class Relayer {
     //TODO: fugly refactor
     this.decChanger = {
       [cfg.chain1]: (amt: any) => {
-	if(cfg.decimals2 - cfg.decimals1 < 0) {
-		return BigNumber.from(amt).div(ten.pow(cfg.decimals1 - cfg.decimals2))
-	} else {
-		return BigNumber.from(amt).mul(ten.pow(cfg.decimals2 - cfg.decimals1))
-	}
+        if (cfg.decimals2 - cfg.decimals1 < 0) {
+          return BigNumber.from(amt).div(ten.pow(cfg.decimals1 - cfg.decimals2))
+        } else {
+          return BigNumber.from(amt).mul(ten.pow(cfg.decimals2 - cfg.decimals1))
+        }
       },
       [cfg.chain2]: (amt: any) => {
-		if(cfg.decimals1 - cfg.decimals2 < 0) {
-			return BigNumber.from(amt).div(ten.pow(cfg.decimals2 - cfg.decimals1))
-		} else {
-			return BigNumber.from(amt).mul(ten.pow(cfg.decimals1 - cfg.decimals2))
-		}
+        if (cfg.decimals1 - cfg.decimals2 < 0) {
+          return BigNumber.from(amt).div(ten.pow(cfg.decimals2 - cfg.decimals1))
+        } else {
+          return BigNumber.from(amt).mul(ten.pow(cfg.decimals1 - cfg.decimals2))
+        }
       }
     };
 
@@ -148,6 +149,8 @@ export class Relayer {
         receipt = await tx.wait();
         console.log(`  handle_lock() tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');
+        try { await addRecord(rec.id, evt.from, evt.to, rec.from_address, rec.to_address, rec.amount); }
+        catch (e) { console.log("DB: failed to create record", e) }
         break;
 
       case 'RevertRequestEvent':
@@ -184,7 +187,10 @@ export class Relayer {
       case 'ReleaseEvent':
       case 'RedeemEvent':
         //TODO: get amount
+        const __s = evt.name == 'RedeemEvent' ? 'REDEEM' : 'RELEASE';
         console.log(`${evt.name} (${evt.from}) id(${evt.args})`);
+        try { await updateState(evt.args, __s); }
+        catch (e) { console.log("DB: failed to update state", e) }
         break;
 
       default:
