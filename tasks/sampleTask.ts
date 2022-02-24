@@ -283,6 +283,19 @@ task("release", "release fund")
     await tx.wait();
   });
 
+task("approve", "increase allownce for user to bridge")
+  .addParam("chain", "from chain name")
+  .addParam("account", "nickname(alice|bob)")
+  .setAction(async (taskArgs, hre) => {
+    hre.changeNetwork(taskArgs.chain);
+    const cfg = await loadConfig(hre, taskArgs.chain);
+    const account: keyof ChainConfig = taskArgs.account;
+    const tx = await cfg.token?.connect(cfg[account]).approve(cfg.bridge.address, hre.ethers.constants.MaxUint256);
+    console.log(`approve ${account} txhash(${tx.hash})`)
+    await tx.wait();
+  })
+
+
 task("lock", "initiaing bridge transaction")
   .addParam("fromchain", "from chain name")
   .addParam("from", "from account nickname(alice|bob)")
@@ -298,13 +311,9 @@ task("lock", "initiaing bridge transaction")
     const decimals = await cfg1.token.decimals(); //TODO(PERF)
     const amt = hre.ethers.utils.parseUnits(taskArgs.amount, decimals);
 
-    let from: keyof ChainConfig = taskArgs.from;
-    let tx = await cfg1.token?.connect(cfg1[from]).increaseAllowance(cfg1.bridge.address, amt);
-    console.log(`increase allownce by ${amt} tx(${tx.hash})`)
-    await tx.wait();
-
     const toAddress = getAddress(cfg2, taskArgs.to);
-    tx = await cfg1.bridge.connect(cfg1[from]).lock(
+    const from: keyof ChainConfig = taskArgs.from;
+    const tx = await cfg1.bridge.connect(cfg1[from]).lock(
       100, //HACK: not really checked anywhere // TODO: proper
       toAddress,
       cfg1.token?.address,

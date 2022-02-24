@@ -10,7 +10,8 @@ export const IERC20_ABI = [
   "function symbol() view returns (string)",
   "function balanceOf(address) view returns (uint256)",
   "function transfer(address,uint256)",
-  "function increaseAllowance(address,uint256)"
+  "function increaseAllowance(address,uint256)",
+  "function approve(address, uint256)"
 ]
 
 export interface ChainConfig {
