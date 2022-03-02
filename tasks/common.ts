@@ -18,9 +18,11 @@ export interface ChainConfig {
   token: Contract | undefined,
   bridge: Contract | undefined,
   owner: SignerWithAddress,
-  relayOwner: SignerWithAddress,
   bob: SignerWithAddress,
   alice: SignerWithAddress
+  relay1: SignerWithAddress,
+  relay2: SignerWithAddress,
+  relay3: SignerWithAddress
 }
 
 export async function printConfig(cfg: ChainConfig, hre: any) {
@@ -84,15 +86,17 @@ export async function loadConfig(hre: any, chain: string) {
 
   const decimals = await token.decimals();
 
-  const [owner, relay, bob, alice, ..._] = await hre.ethers.getSigners();
+  const [owner, relay1, bob, alice, relay2, relay3, ..._] = await hre.ethers.getSigners();
 
   return {
     token: token,
     bridge: bridge,
     owner: owner,
-    relayOwner: relay,
     bob: bob,
-    alice: alice
+    alice: alice,
+    relay1: relay1,
+    relay2: relay2,
+    relay3: relay3
   }
 }
 

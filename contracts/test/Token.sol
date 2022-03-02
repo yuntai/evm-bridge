@@ -10,7 +10,7 @@ contract Token is ERC20 {
         // 1 dollar = 100 cents
         // 1 token = 1 * (10 ** decimals)
         dec = decimal;
-        _mint(msg.sender, 10000 * 10**uint(decimals()));
+        _mint(msg.sender, 1000000000000000000000 * 10**uint(decimals()));
     }
 
     function decimals() public view override(ERC20) returns (uint8) {

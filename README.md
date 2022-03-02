@@ -75,10 +75,10 @@ Before issuing `redeem` command, the status of the bridge record can be checked 
 which should show `RELEASED` state.
 
 ## Test
-To run local test, two local hardhat nodes need to run,
+To run local test, two local glanche chains need to run,
 ```
-npx hardnat node --port 18545
-npx hardnat node --port 28545
+./node_modules/.bin/ganache-cli -p18545 -i654321|grep -v ^eth_
+./node_modules/.bin/ganache-cli -p28545 -i654322|grep -v ^eth_
 npx hardhat test
 ```
 

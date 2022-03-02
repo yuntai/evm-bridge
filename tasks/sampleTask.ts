@@ -99,7 +99,7 @@ task("deployBridge")
     hre.changeNetwork(taskArgs.chain);
     console.log(`deploying Bridge to ${taskArgs.chain}`);
     const Bridge = await hre.ethers.getContractFactory("Bridge");
-    const bridge = await Bridge.connect(cfg.owner).deploy(cfg.relayOwner.address, taskArgs.token);
+    const bridge = await Bridge.connect(cfg.owner).deploy(cfg.relay1.address, taskArgs.token);
     const receipt = await bridge.deployed();
     cfg.bridge = bridge;
     console.log("new bridge address:", bridge.address);
@@ -254,6 +254,8 @@ task("dumpdb", "dumpdb")
 task("launchRelay", "Launc relay")
   .addParam("chain1", "chain1")
   .addParam("chain2", "chain2")
+  .addParam("relay1", "relay account for chain1")
+  .addParam("relay2", "relay account for chain2")
   .setAction(async (taskArgs, hre) => {
     let cfg1 = await loadConfig(hre, taskArgs.chain1);
     let cfg2 = await loadConfig(hre, taskArgs.chain2);
@@ -265,8 +267,8 @@ task("launchRelay", "Launc relay")
     const cfg: RelayConfig = {
       chain1: taskArgs.chain1,
       chain2: taskArgs.chain2,
-      relayOwner1: cfg1.relayOwner,
-      relayOwner2: cfg2.relayOwner,
+      relayOwner1: cfg1[taskArgs.relay1 as keyof ChainConfig],
+      relayOwner2: cfg2[taskArgs.relay2 as keyof ChainConfig],
       bridge1: cfg1.bridge,
       bridge2: cfg2.bridge,
       decimals1: dec1,

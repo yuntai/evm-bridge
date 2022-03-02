@@ -25,12 +25,13 @@ interface Event {
 export class Relayer {
   owners: { [chain: string]: SignerWithAddress }
   bridges: { [chain: string]: Contract }
-  events: { [chain: string]: Event[] } = { chain1: [], chain2: [] };
+  events: { [chain: string]: Event[] }
   hre: any;
   decChanger: any;
 
   constructor(cfg: RelayConfig, hre: any, localTestMode: boolean = false) {
     this.hre = hre;
+    this.events = {[cfg.chain1]: [], [cfg.chain2]: []}
     this.owners = {
       [cfg.chain1]: cfg.relayOwner1,
       [cfg.chain2]: cfg.relayOwner2,
@@ -40,7 +41,7 @@ export class Relayer {
       [cfg.chain2]: cfg.bridge2,
     }
 
-    // can be based on chainId but hardhat doesn't allow to configure chainId 
+    // can be based on chainId but hardhat doesn't allow to configure chainId
     // when using hardhat node
     let routers: { [chain: string]: string } = {
       [cfg.chain1]: cfg.chain2,

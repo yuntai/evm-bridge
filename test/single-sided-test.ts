@@ -29,11 +29,13 @@ describe("Single-sided", function () {
   let owner: SignerWithAddress,
     bob: SignerWithAddress,
     alice: SignerWithAddress,
-    relay: SignerWithAddress, _;
+    relay: SignerWithAddress,
+    relay2: SignerWithAddress,
+    relay3: SignerWithAddress, _;
 
   beforeEach(async function () {
     hre.changeNetwork('hardhat');
-    [owner, bob, alice, relay, ..._] = await ethers.getSigners();
+    [owner, bob, alice, relay, relay2, relay3, ..._] = await ethers.getSigners();
 
     const Token = await ethers.getContractFactory("Token");
     token = await Token.deploy("Token", "TOK", 18);
@@ -75,6 +77,49 @@ describe("Single-sided", function () {
       const peerBalance = (await bridge.peer_balance()).toNumber();
       await (await bridge.connect(relay).handle_supply(106));
       expect((await bridge.peer_balance()).toNumber()).to.equal(peerBalance+106);
+  });
+
+  it("relay", async function() {
+	await expect(
+      		bridge.connect(owner).removeRelay(relay.address)
+	).to.be.revertedWith("bridge: at least one relay");
+	await expect(
+      		bridge.connect(owner).removeRelay(bob.address)
+	).to.be.revertedWith("bridge: unknown relay");
+
+
+      const _id = soliditySha3(
+        from_chain_id, to_chain_id,
+        bob.address, alice.address,
+        token.address, token.address,
+        1002,
+        0
+      );
+      let transferRecord = {
+        id: _id,
+        from_chain_id: from_chain_id,
+        to_chain_id: to_chain_id,
+        from_address: bob.address,
+        to_address: alice.address,
+        from_token: token.address,
+        to_token: token.address,
+        amount: 1002,
+        state: TransferState.LOCKED
+      }
+
+      await expect(
+	      bridge.connect(relay2).handle_lock(transferRecord)
+      ).to.be.revertedWith("bridge: only from relay");
+
+      const tx = await bridge.connect(owner).addRelay(relay2.address);
+      await tx.wait();
+
+      await bridge.connect(relay2).handle_lock(transferRecord);
+      await bridge.connect(owner).removeRelay(relay2.address);
+
+      await expect(
+	      bridge.connect(relay2).handle_lock(transferRecord)
+      ).to.be.revertedWith("bridge: only from relay");
   });
 
   it("Sender Lock", async function () {

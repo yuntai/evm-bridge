@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 import "hardhat/console.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 //TODO: use openzepplin
 contract Ownable {
@@ -20,17 +21,31 @@ contract Ownable {
 }
 
 contract Bridge is Ownable {
-    constructor(address _relay, address _token) {
-        require(_token != address(0), "bridge: zero token address");
-        owner = msg.sender;
-        relay = _relay;
-        token = _token;
+    using EnumerableSet for EnumerableSet.AddressSet;
+    EnumerableSet.AddressSet private relaySet;
+
+    function removeRelay(address _relay) external onlyOwner returns (bool) {
+        require(relaySet.contains(_relay), "bridge: unknown relay");
+        require(relaySet.length() > 1, "bridge: at least one relay");
+        return relaySet.remove(_relay);
     }
 
-    //TODO: use openzepplin role library
+    function addRelay(address _relay) external onlyOwner returns (bool) {
+        require(_relay != address(0), "bridge: zero relay address");
+        return relaySet.add(_relay);
+    }
+
     modifier onlyRelay() {
-        require(msg.sender == relay, "bridge: only relay");
+        require(relaySet.contains(msg.sender), "bridge: only from relay");
         _;
+    }
+
+    constructor(address _relay, address _token) {
+        require(_token != address(0), "bridge: zero token address");
+        require(_relay != address(0), "bridge: zero relay address");
+        owner = msg.sender;
+        relaySet.add(_relay);
+        token = _token;
     }
 
     enum TransferState {
@@ -245,7 +260,8 @@ contract Bridge is Ownable {
     function setRelay(address) external onlyOwner {} // set relay identity
 
     function kill() public onlyOwner {
-        address payable addr = payable(address(owner));
-        selfdestruct(addr);
+        uint256 _bal = IERC20(token).balanceOf(address(owner));
+        SafeERC20.safeTransfer(IERC20(token), address(owner), _bal);
+        selfdestruct(payable(address(owner)));
     }
 }
