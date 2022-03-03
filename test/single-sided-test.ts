@@ -64,13 +64,21 @@ describe("Single-sided", function () {
     bridgeBegBal = await token.balanceOf(bridge.address);
     bobBegBal = await token.balanceOf(bob.address);
 
-    to_chain_id = 7777;
-    from_chain_id = 31337; // hardhat default chain id; TODO: how to access network config here
+    to_chain_id = 1001;
+    from_chain_id = 1002;
   });
 
   it("supply", async function() {
       const tx = await bridge.supply(105);
       await expect(tx).to.emit(bridge, 'SupplyEvent').withArgs(105);
+  });
+
+  it("kill", async function() {
+      const amt = await token.balanceOf(owner.address);
+      const amt2 = await token.balanceOf(bridge.address);
+      await (await bridge.kill()).wait();
+      expect(await token.balanceOf(owner.address)).to.equal(amt.add(amt2));
+      expect(await token.balanceOf(bridge.address)).to.equal(0);
   });
 
   it("handle supply", async function() {

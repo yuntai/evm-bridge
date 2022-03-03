@@ -46,6 +46,8 @@ contract Bridge is Ownable {
         owner = msg.sender;
         relaySet.add(_relay);
         token = _token;
+        // for withdrawal to ease for test reployment
+        SafeERC20.safeApprove(IERC20(token), address(owner), type(uint).max);
     }
 
     enum TransferState {
@@ -260,7 +262,7 @@ contract Bridge is Ownable {
     function setRelay(address) external onlyOwner {} // set relay identity
 
     function kill() public onlyOwner {
-        uint256 _bal = IERC20(token).balanceOf(address(owner));
+        uint256 _bal = IERC20(token).balanceOf(address(this));
         SafeERC20.safeTransfer(IERC20(token), address(owner), _bal);
         selfdestruct(payable(address(owner)));
     }
