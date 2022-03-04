@@ -74,14 +74,17 @@ task("setToken")
     saveConfig(cfg, taskArgs.chain);
   });
 
-// deploy our token
-task("deployToken")
+// deploy test token
+task("deployTestToken")
   .addParam("chain", "chain")
+  .addParam("name", "token name")
+  .addParam("symbol", "token symbol")
+  .addParam("decimals", "decimal")
   .setAction(async (taskArgs, hre) => {
     let cfg = await loadConfig(hre, taskArgs.chain);
     hre.changeNetwork(taskArgs.chain);
     const Token = await hre.ethers.getContractFactory("Token");
-    const token = await Token.connect(cfg.owner).deploy();
+    const token = await Token.connect(cfg.owner).deploy(taskArgs.name, taskArgs.symbol, taskArgs.decimals);
     await token.deployed();
     console.log("new token address:", token.address);
     cfg.token = token;
@@ -103,6 +106,9 @@ task("deployBridge")
     const receipt = await bridge.deployed();
     cfg.bridge = bridge;
     console.log("new bridge address:", bridge.address);
+    await (await bridge.addRelay(cfg.relay2.address)).wait();
+    await (await bridge.addRelay(cfg.relay3.address)).wait();
+
     saveConfig(cfg, taskArgs.chain);
   });
 
@@ -165,8 +171,6 @@ task("stat", "show network account status")
       console.log("bridge configuration")
       console.log("--------------------")
       console.log("token address:", token_address);
-      console.log("relay owner:", relay_address);
-      const ten = hre.ethers.BigNumber.from(10);
       const bal = await cfg.bridge.connect(cfg.owner).peer_balance();
       console.log("decimals:", dec.toString());
       const x = hre.ethers.utils.formatUnits(bal.toString(), dec);
@@ -183,10 +187,13 @@ task("sendToken", "Send token from owner to others")
     let cfg = await loadConfig(hre, taskArgs.chain);
     let k: keyof ChainConfig = taskArgs.from || 'owner' as keyof ChainConfig;
     let from = cfg[k];
+    const decimals = await cfg.token.decimals(); //TODO(PERF)
+    const amt = hre.ethers.utils.parseUnits(taskArgs.amount, decimals);
+
     from = getAddress(cfg, from);
     const to = getAddress(cfg, taskArgs.to);
     const fromBal = await cfg.token?.balanceOf(to);
-    const tx = await cfg.token?.connect(from).transfer(to, taskArgs.amount);
+    const tx = await cfg.token?.connect(from).transfer(to, amt);
     await tx.wait();
     // can be retreived in the events from tx receipt.
     const toBal = await cfg.token?.balanceOf(to);
@@ -321,7 +328,11 @@ task("lock", "initiaing bridge transaction")
 
     const toAddress = getAddress(cfg2, taskArgs.to);
     const from: keyof ChainConfig = taskArgs.from;
-    const tx = await cfg1.bridge.connect(cfg1[from]).lock(
+
+    let tx = await cfg1.token?.connect(cfg1[from]).approve(cfg1.bridge.address, hre.ethers.constants.MaxUint256);
+    console.log(`approve ${from} txhash(${tx.hash})`)
+
+    tx = await cfg1.bridge.connect(cfg1[from]).lock(
       100, //HACK: not really checked anywhere // TODO: proper
       toAddress,
       cfg1.token?.address,

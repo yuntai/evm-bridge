@@ -87,10 +87,11 @@ export class Relayer {
 
     this.hre.changeNetwork(cfg.chain1);
 
+    //TODO: read from abi
     const EVENTS = ['LockEvent', 'RevertRequestEvent', 'RevertResponseEvent', 'SupplyEvent', 'ReleaseEvent', 'RedeemEvent'];
     for (let evtName of EVENTS) {
       for (let b in this.bridges) {
-        this.bridges[b].on(evtName, (args: any) => {
+        this.bridges[b].on(evtName, (...args: any[]) => {
           const target = this.bridges[routers[b]];
           const event = { name: evtName, args: args, from: b, to: routers[b], target: target };
           if (localTestMode) {
@@ -174,11 +175,22 @@ export class Relayer {
         break;
 
       case 'SupplyEvent':
-        const fromAmt = evt.args;
+        const [fromAmt, seq, ..._] = evt.args;
         const toAmt = this.decChanger[evt.from](fromAmt);
         this.hre.changeNetwork(evt.to);
-        console.log(`${evt.name} from(${evt.from}) to(${evt.to}) amt(${fromAmt}) toAmt(${toAmt})`);
-        tx = await evt.target.connect(this.owners[evt.to]).handle_supply(toAmt);
+        console.log(`${evt.name} from(${evt.from}) to(${evt.to}) amt(${fromAmt}) toAmt(${toAmt} seq(${seq})`);
+	try {
+        	tx = await evt.target.connect(this.owners[evt.to]).handle_supply(toAmt, seq);
+	} catch(err) {
+        // https://gist.github.com/gluk64/fdea559472d957f1138ed93bcbc6f78a
+        // @ts-ignore:next-line
+        console.log(err.data);
+        //const code: string = err.data.replace('Reverted ','');
+        //console.log({err});
+        //let reason = this.hre.ethers.utils.toUtf8String('0x' + code.substr(138));
+        //console.log('revert reason:', reason);
+		break;
+	}
         receipt = await tx.wait();
         console.log(`  handle_supply() tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');

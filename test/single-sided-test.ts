@@ -64,8 +64,8 @@ describe("Single-sided", function () {
     bridgeBegBal = await token.balanceOf(bridge.address);
     bobBegBal = await token.balanceOf(bob.address);
 
-    to_chain_id = 1001;
-    from_chain_id = 1002;
+    to_chain_id = 31337;
+    from_chain_id = 31337;
   });
 
   it("supply", async function() {

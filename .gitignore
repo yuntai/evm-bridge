@@ -8,3 +8,7 @@ db.db
 #Hardhat files
 cache
 artifacts
+
+#local chains
+cfgs/chain1.json
+cfgs/chain2.json

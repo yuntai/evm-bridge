@@ -84,7 +84,7 @@ export async function loadConfig(hre: any, chain: string) {
     }
   }
 
-  const decimals = await token.decimals();
+  //const decimals = await token.decimals();
 
   const [owner, relay1, bob, alice, relay2, relay3, ..._] = await hre.ethers.getSigners();
 

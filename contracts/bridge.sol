@@ -73,14 +73,15 @@ contract Bridge is Ownable {
     event LockEvent(bytes32 indexed);
     event RevertRequestEvent(bytes32 indexed);
     event RevertResponseEvent(bytes32 indexed, TransferState indexed);
-    event SupplyEvent(uint256 amount);
+    event SupplyEvent(uint256 amount, uint256 seq);
 
     event ReleaseEvent(bytes32 indexed, uint256 amount);
     event RedeemEvent(bytes32 indexed, uint256 amount);
 
-    address public relay;
     address public token; // no need to be state var, but requires verification when lock()
     uint256 counter;
+    uint256 supply_seq;
+    uint256 peer_supply_seq;
 
     // assumption under having a single peer chain and single type of token
     // later map(chain -> map(token -> peer_balance)
@@ -201,13 +202,16 @@ contract Bridge is Ownable {
     //TODO: check calldata usage again
     function handle_lock(TransferRecord calldata record) external onlyRelay {
         //TODO: perhaps hash id check here?
+        require(records[record.id].id == 0x0, "bridge: record already exists");
         peer_balance += record.amount;
         records[record.id] = record;
         records[record.id].state = TransferState.LOCKED;
     }
 
-    function handle_supply(uint256 amount) external onlyRelay {
+    function handle_supply(uint256 amount, uint256 seq) external onlyRelay {
+        require(peer_supply_seq == seq, "bridge: supply seq already seen");
         peer_balance += amount;
+        peer_supply_seq += 1;
     }
 
     //TODO: check reentry attack seems okay b/c state is set before transfer
@@ -250,7 +254,8 @@ contract Bridge is Ownable {
             address(this),
             amount
         );
-        emit SupplyEvent(amount);
+        emit SupplyEvent(amount, supply_seq);
+        supply_seq += 1;
     }
 
     function balance() external view onlyOwner returns (uint256) {
