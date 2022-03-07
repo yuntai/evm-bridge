@@ -31,7 +31,7 @@ export class Relayer {
 
   constructor(cfg: RelayConfig, hre: any, localTestMode: boolean = false) {
     this.hre = hre;
-    this.events = {[cfg.chain1]: [], [cfg.chain2]: []}
+    this.events = { [cfg.chain1]: [], [cfg.chain2]: [] }
     this.owners = {
       [cfg.chain1]: cfg.relayOwner1,
       [cfg.chain2]: cfg.relayOwner2,
@@ -59,23 +59,20 @@ export class Relayer {
 
     const BigNumber = hre.ethers.BigNumber;
     const ten = BigNumber.from(10);
-    //TODO: fugly refactor
-    this.decChanger = {
-      [cfg.chain1]: (amt: any) => {
-        if (cfg.decimals2 - cfg.decimals1 < 0) {
-          return BigNumber.from(amt).div(ten.pow(cfg.decimals1 - cfg.decimals2))
-        } else {
-          return BigNumber.from(amt).mul(ten.pow(cfg.decimals2 - cfg.decimals1))
-        }
-      },
-      [cfg.chain2]: (amt: any) => {
-        if (cfg.decimals1 - cfg.decimals2 < 0) {
-          return BigNumber.from(amt).div(ten.pow(cfg.decimals2 - cfg.decimals1))
-        } else {
-          return BigNumber.from(amt).mul(ten.pow(cfg.decimals1 - cfg.decimals2))
-        }
+
+    const changeDec = (_amt: any, dec1: number, dec2: number): typeof BigNumber => {
+      const amt = BigNumber.from(_amt);
+      if (dec1 > dec2) {
+        return amt.div(ten.pow(dec1 - dec2));
+      } else {
+        return amt.mul(ten.pow(dec2 - dec1));
       }
-    };
+    }
+
+    this.decChanger = {
+      [cfg.chain1]: (amt: any) => changeDec(amt, cfg.decimals1, cfg.decimals2),
+      [cfg.chain2]: (amt: any) => changeDec(amt, cfg.decimals2, cfg.decimals1),
+    }
 
     console.log(`[${cfg.chain1}]`);
     console.log(`relayOwner: ${cfg.relayOwner1.address} `)
@@ -103,6 +100,7 @@ export class Relayer {
       }
     }
   }
+
 
   async loop() {
     console.log("staring relay loop...")
@@ -137,40 +135,64 @@ export class Relayer {
     this.events[chain] = [];
   }
 
+  printRevertReason(err: any): string {
+    const r = /revert bridge:.+/g;
+    // @ts-ignore:next-line
+    return `${err.data.stack.match(r)}`;
+  }
+
   async handle(evt: Event) {
-    let rec, tx, receipt;
+    let rec, tx, receipt, _id;
 
     switch (evt.name) {
       case 'LockEvent':
-        rec = await this.get_record(evt.from, evt.args);
+        _id = evt.args[0];
+        rec = await this.get_record(evt.from, _id);
         const newAmount = this.decChanger[evt.from](rec.amount);
         console.log(`${evt.name} (${evt.from} -> ${evt.to}) id(${rec.id}) amt(${rec.amount}) toAmt(${newAmount})`);
         rec.amount = newAmount;
         this.hre.changeNetwork(evt.to);
-        tx = await evt.target.connect(this.owners[evt.to]).handle_lock(rec);
+        try {
+          tx = await evt.target.connect(this.owners[evt.to]).handle_lock(rec);
+        } catch (err) {
+          console.log(`  handle_lock(${rec.id}) ${this.printRevertReason(err)}`);
+          break;
+        }
         receipt = await tx.wait();
-        console.log(`  handle_lock() tx(${tx.hash})`);
+        console.log(`  handle_lock(${rec.id}) tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');
         try { await addRecord(rec.id, evt.from, evt.to, rec.from_address, rec.to_address, rec.amount); }
         catch (e) { console.log("DB: failed to create record", e) }
         break;
 
       case 'RevertRequestEvent':
-        console.log(`${evt.name} (${evt.from} -> ${evt.to}) id(${evt.args})`);
+        _id = evt.args[0];
+        console.log(`${evt.name} (${evt.from} -> ${evt.to}) id(${_id})`);
         this.hre.changeNetwork(evt.to);
-        tx = await evt.target.connect(this.owners[evt.to]).handle_revert_request(evt.args);
+        try {
+          tx = await evt.target.connect(this.owners[evt.to]).handle_revert_request(_id);
+        } catch (err) {
+          console.log(`  handle_revert_request(${_id}) ${this.printRevertReason(err)}`);
+          break;
+        }
         receipt = await tx.wait();
-        console.log(`  handle_revert_request() tx(${tx.hash})`);
+        console.log(`  handle_revert_request(${_id}) tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');
         break;
 
       case 'RevertResponseEvent':
-        rec = await this.get_record(evt.from, evt.args);
-        console.log(`${evt.name} (${evt.from} -> ${evt.to}) id(${evt.args}) state(${getStateName(rec.state)})`);
+        _id = evt.args[0];
+        rec = await this.get_record(evt.from, _id);
+        console.log(`${evt.name} (${evt.from} -> ${evt.to}) id(${evt.args[0]}) state(${getStateName(rec.state)})`);
         this.hre.changeNetwork(evt.to);
-        tx = await evt.target.connect(this.owners[evt.to]).handle_revert_response(evt.args, rec.state);
+        try {
+          tx = await evt.target.connect(this.owners[evt.to]).handle_revert_response(_id, rec.state);
+        } catch (err) {
+          console.log(`  handle_revert_response(${_id}) ${this.printRevertReason(err)}`);
+          break;
+        }
         receipt = await tx.wait();
-        console.log(`  handle_revert_response() tx(${tx.hash})`);
+        console.log(`  handle_revert_response(${_id}, ${rec.state}) tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');
         break;
 
@@ -178,31 +200,24 @@ export class Relayer {
         const [fromAmt, seq, ..._] = evt.args;
         const toAmt = this.decChanger[evt.from](fromAmt);
         this.hre.changeNetwork(evt.to);
-        console.log(`${evt.name} from(${evt.from}) to(${evt.to}) amt(${fromAmt}) toAmt(${toAmt} seq(${seq})`);
-	try {
-        	tx = await evt.target.connect(this.owners[evt.to]).handle_supply(toAmt, seq);
-	} catch(err) {
-        // https://gist.github.com/gluk64/fdea559472d957f1138ed93bcbc6f78a
-        // @ts-ignore:next-line
-        console.log(err.data);
-        //const code: string = err.data.replace('Reverted ','');
-        //console.log({err});
-        //let reason = this.hre.ethers.utils.toUtf8String('0x' + code.substr(138));
-        //console.log('revert reason:', reason);
-		break;
-	}
+        console.log(`${evt.name} from(${evt.from}) to(${evt.to}) amt(${fromAmt}) toAmt(${toAmt}) seq(${seq})`);
+        try {
+          tx = await evt.target.connect(this.owners[evt.to]).handle_supply(toAmt, seq);
+        } catch (err) {
+          console.log(`  handle_supply(${seq}) ${this.printRevertReason(err)}`);
+          break;
+        }
         receipt = await tx.wait();
-        console.log(`  handle_supply() tx(${tx.hash})`);
+        console.log(`  handle_supply(${seq}) tx(${tx.hash})`);
         if (!receipt.status) console.log('   FAILED');
         break;
 
       // non-routing events
       case 'ReleaseEvent':
       case 'RedeemEvent':
-        //TODO: get amount
-        const __s = evt.name == 'RedeemEvent' ? 'REDEEM' : 'RELEASE';
-        console.log(`${evt.name} (${evt.from}) id(${evt.args})`);
-        try { await updateState(evt.args, __s); }
+        const __state = evt.name == 'RedeemEvent' ? 'REDEEM' : 'RELEASE';
+        console.log(`${evt.name} chain(${evt.from}) id(${evt.args[0]}) amount(${evt.args[1]})`);
+        try { await updateState(evt.args, __state); }
         catch (e) { console.log("DB: failed to update state", e) }
         break;
 

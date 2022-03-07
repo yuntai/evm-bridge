@@ -74,14 +74,28 @@ Before issuing `redeem` command, the status of the bridge record can be checked 
 
 which should show `RELEASED` state.
 
-## Test
+## Local Test
 To run local test, two local glanche chains need to run,
 ```
-./node_modules/.bin/ganache-cli -p18545 -i654321|grep -v ^eth_
-./node_modules/.bin/ganache-cli -p28545 -i654322|grep -v ^eth_
-npx hardhat test
+./node_modules/.bin/ganache-cli -p18545 -i654321|grep -v '^eth_\|^web3_'
+./node_modules/.bin/ganache-cli -p28545 -i654322|grep -v '^eth_\|^web3_'
 ```
 
+Setup bridge, test tokens and distribute tokens to users,
+```
+sh scripts/setup_local.sh
+```
+
+Launch tree relays each in different shell,
+```
+npx hardhat launchRelay --chain1 chain1 --chain2 chain2 --relay1 relay1 --relay2 relay1
+```
+```
+npx hardhat launchRelay --chain1 chain1 --chain2 chain2 --relay1 relay2 --relay2 relay2
+```
+```
+npx hardhat launchRelay --chain1 chain1 --chain2 chain2 --relay1 relay3 --relay2 relay3
+```
 # Others
 
 ### generate remote accounts

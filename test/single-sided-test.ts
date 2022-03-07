@@ -55,7 +55,7 @@ describe("Single-sided", function () {
 
     await token.connect(owner).increaseAllowance(bridge.address, 100000);
     await bridge.supply(100000)
-    await (await bridge.connect(relay).handle_supply(10000));
+    await (await bridge.connect(relay).handle_supply(10000, 0));
     initialPeerBalance = await bridge.peer_balance();
 
     token.approve(bridge.address, 10000);
@@ -70,7 +70,7 @@ describe("Single-sided", function () {
 
   it("supply", async function() {
       const tx = await bridge.supply(105);
-      await expect(tx).to.emit(bridge, 'SupplyEvent').withArgs(105);
+      await expect(tx).to.emit(bridge, 'SupplyEvent').withArgs(105, 1);
   });
 
   it("kill", async function() {
@@ -83,7 +83,7 @@ describe("Single-sided", function () {
 
   it("handle supply", async function() {
       const peerBalance = (await bridge.peer_balance()).toNumber();
-      await (await bridge.connect(relay).handle_supply(106));
+      await (await bridge.connect(relay).handle_supply(106, 1));
       expect((await bridge.peer_balance()).toNumber()).to.equal(peerBalance+106);
   });
 
@@ -304,6 +304,6 @@ describe("Single-sided", function () {
 
   it("fund peer", async function () {
     const tx = await bridge.connect(owner).supply(101);
-    await expect(tx).to.emit(bridge, 'SupplyEvent').withArgs(101);
+    await expect(tx).to.emit(bridge, 'SupplyEvent').withArgs(101, 1);
   });
 });

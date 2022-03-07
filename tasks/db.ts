@@ -33,7 +33,6 @@ export function updateState(id: string, state: string) {
         db.run("UPDATE records SET state=? WHERE id=?", inputData, function (err: any, rows: any) {
             if (err) reject(err);
             else {
-                console.log(inputData, "ok");
                 db.close();
                 resolve(rows);
             }

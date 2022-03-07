@@ -167,7 +167,7 @@ task("stat", "show network account status")
     if (cfg.bridge) {
       const token_address = await cfg.bridge.token();
       const dec = await cfg.token.decimals();
-      const relay_address = await cfg.bridge.relay();
+      //const relay_address = await cfg.bridge.relay();
       console.log("bridge configuration")
       console.log("--------------------")
       console.log("token address:", token_address);
