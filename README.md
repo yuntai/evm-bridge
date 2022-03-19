@@ -5,6 +5,13 @@
 npm install
 ```
 
+## Note on Security
+Totally vulnerable when the private keys of the relayers are compromised. To mitigate this, the signature of the intitator can be included which to be verified
+ by the birdge on the receiving chain.  But the sender-initiated revert operation is still not secure since the bridge on the sender side can never trust
+ the state of the transfer reported from the bridge on the receiving chain if the relayer is not trusted. More generally any operation that needs to inquire
+ the state of the other chain is not possbilly done trustlessly. In the same vein,the fund cannot be securly withdrawed since the state of the other side needs
+ to be inquired.
+
 ## Test on main nets with USDC (betwen polygon and bsc)
 In `hardhat.config.ts`, main nets are configured with four test accounts, nicknamed `owner`, `relayOwner`, `bob` and `alice`. The preconfigured private keys for these four accounts are read from `.env` file.
 `owner` account is one who bridge contract and `relayOwner` is the account invoking the contract from the relayer.
@@ -139,17 +146,6 @@ npx hardhat launchRelay --chain1 chain1 --chain2 chain2 --relay1 relay3 --relay2
 - binance faucet `https://testnet.binance.org/faucet-smart`
 - rinkeby faucet `https://faucet.rinkeby.io/`
 
-## build test configuration from scratch
-## Known issues & TODO
-- make relay stateful (events catchup logic?)
-  firebase w/ rpc may be a good architecture if we don't care too much about perf/.
-- peer balance logic is fragile. additional sync command necessary?
-- proper to have handling decimals in relay?
-  should it be inside contract?
-- gas limit and price hardcoded
-- duplicate rpc requests in the scripts (minor)
-- withdrawal/kill from bridge
-- bridge admin (lifecycle, change relayer, owner, token etc)
+### LINKS
+- https://docs.connext.network/Integration/SystemOverview/howitworks/
 
-## Other notes
-- polygon default rpc stucky. alchemy is used.
