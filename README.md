@@ -148,4 +148,5 @@ npx hardhat launchRelay --chain1 chain1 --chain2 chain2 --relay1 relay3 --relay2
 
 ### LINKS
 - https://docs.connext.network/Integration/SystemOverview/howitworks/
+- https://andrecronje.medium.com/multichain-dapp-guide-standards-and-best-practices-8fabe2672c60
 
